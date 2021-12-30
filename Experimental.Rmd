@@ -19,7 +19,9 @@ renv::snapshot()
 # devtools::install_github("rjlopez2/AnlysisOfWaves")
 
 pacman::p_load(shiny, tidyverse, plotly, 
-               DT, shinythemes, shinyFiles, fs, usethis, devtools, ijtiff, AnlysisOfWaves)
+               DT, shinythemes, shinyFiles, fs, 
+               usethis, devtools, ijtiff, AnlysisOfWaves,
+               plotly)
 
 ```
 
@@ -28,3 +30,52 @@ pacman::p_load(shiny, tidyverse, plotly,
 
 ```
 
+# Reading a linescan image in tif format and plotting profile
+
+```{r}
+path_to_file <- "~/Desktop/new_intac_cell_repre_ls/CPVT/20190117 L1 CS3 Cell A0002_BG.tif"
+```
+
+
+```{r}
+
+AnlysisOfWaves::make_profile_func(path_to_file) %>% 
+  head
+
+read_tags(path_to_file, frames = "all")
+```
+# create new function to read tif files
+
+```{r}
+make_profile_func_test <- function(my_dir){
+  
+  y_px_size = read_tags(my_dir) %>% 
+    pluck("frame1", "y_resolution")
+  
+  my_trace_df <- my_dir %>%
+    ijtiff::read_tif() %>%
+    `[` ( , , 1, 1) %>%
+    rowMeans() %>%
+    dplyr::tibble(Time = 1:length(.) * y_px_size / 1000, # set the time in seconds
+           Fluorescence = .)
+  
+  return(my_trace_df)
+}
+```
+
+
+
+
+
+
+```{r}
+path_to_file %>% make_profile_func_test() %>% 
+  ggplot(aes(x = Time, 
+             y = Fluorescence)) +
+  geom_line() +
+  pptx_presentation_theme_func()
+  
+
+ggplotly()
+
+```
