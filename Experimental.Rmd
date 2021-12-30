@@ -9,3 +9,19 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# renv workflow
+```{r}
+renv::snapshot()
+# renv::restore()
+```
+
+```{r}
+pacman::p_load(shiny, tidyverse, plotly, 
+               DT, shinythemes, shinyFiles, fs, usethis, devtools)
+```
+
+```{r}
+# usethis::use_github() # use this to set the github repository after project is been created locally.
+
+```
+
