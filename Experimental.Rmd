@@ -16,8 +16,11 @@ renv::snapshot()
 ```
 
 ```{r}
+# devtools::install_github("rjlopez2/AnlysisOfWaves")
+
 pacman::p_load(shiny, tidyverse, plotly, 
-               DT, shinythemes, shinyFiles, fs, usethis, devtools)
+               DT, shinythemes, shinyFiles, fs, usethis, devtools, ijtiff, AnlysisOfWaves)
+
 ```
 
 ```{r}
