@@ -34,6 +34,11 @@ pacman::p_load(shiny, tidyverse, plotly,
 
 ```{r}
 path_to_file <- "~/Desktop/new_intac_cell_repre_ls/CPVT/20190117 L1 CS3 Cell A0002_BG.tif"
+path_to_file2 <- "/Volumes/RUBEN FILES/Ruben/Work/GroupNiggli/Confocal/2021/SR_exepriments/211214/CPVT-HET/P2/CS1"
+
+path_to_file %>% 
+list.files(full.names = TRUE, pattern = "[0-9]_BG.tif$", recursive = TRUE) #%>% 
+  str_
 ```
 
 
@@ -44,15 +49,16 @@ AnlysisOfWaves::make_profile_func(path_to_file) %>%
 
 read_tags(path_to_file, frames = "all")
 ```
-# create new function to read tif files
+
+# create df from profiles of single tif ls images
 
 ```{r}
-make_profile_func_test <- function(my_dir){
+make_trace_df <- function(my_file_dir){
   
-  y_px_size = read_tags(my_dir) %>% 
+  y_px_size = read_tags(my_file_dir) %>% 
     pluck("frame1", "y_resolution")
   
-  my_trace_df <- my_dir %>%
+  my_trace_df <- my_file_dir %>%
     ijtiff::read_tif() %>%
     `[` ( , , 1, 1) %>%
     rowMeans() %>%
@@ -64,18 +70,70 @@ make_profile_func_test <- function(my_dir){
 ```
 
 
+# make plotly plot
+
+```{r}
+make_plotly_profile <- function(ls_profile_df){
+  {ls_profile_df %>% 
+    ggplot2::ggplot(aes(x = Time, 
+             y = Fluorescence)) +
+    geom_line()} %>% 
+    ggplotly()
+    
+}
+```
 
 
+# extract metadata form a single tif file
+
+```{r}
+extract_metadata_tif <- function(file_dir, meta_data){
+
+  meta_data_names <- set_names(list(meta_data))
+  
+  metadata_df <- meta_data_names %>%
+    map_dfc(~read_tags(file_dir, frames = "all") %>% 
+              pluck(pluck("frame1"))) %>% 
+    select(all_of(meta_data))
+  
+  rm(meta_data_names)
+  return(metadata_df)
+}
+
+```
+
+# create df profiles from multiples tif ls images concatenated
+
+```{r}
+multiple_ls_profile <- function(my_dir){
+  #list the tif files in the provided directory
+  my_ls_file_list <- my_dir %>% 
+    fs::dir_ls(regexp = "[0-9]{4,4}_BG.tif$")
+
+  # create df of files metadata
+  metadata <- my_ls_file_list %>% 
+    map_dfr(~extract_metadata_tif(.x, 
+                                  meta_data =  c("y_resolution")), 
+            .id = "file_id")
+  
+  full_ls_df <- my_ls_file_list %>% 
+    map_dfr(make_trace_df, .id = "file_id") %>% 
+    left_join(metadata) %>% 
+    mutate(file_id = str_sub(file_id, start = -24)) %>% 
+    mutate(Time = 1:length(Time) * y_resolution * 1000) %>% #set in sec the time
+    select(-y_resolution)
+  
+  rm(my_ls_file_list, metadata)
+  
+  return(full_ls_df)
+}
+```
 
 
 ```{r}
-path_to_file %>% make_profile_func_test() %>% 
-  ggplot(aes(x = Time, 
-             y = Fluorescence)) +
-  geom_line() +
-  pptx_presentation_theme_func()
-  
-
-ggplotly()
-
+path_to_file2 %>% 
+  multiple_ls_profile %>% 
+  make_plotly_profile()
 ```
+
+
