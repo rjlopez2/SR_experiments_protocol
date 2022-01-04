@@ -55,8 +55,9 @@ read_tags(path_to_file, frames = "all")
 ```{r}
 make_trace_df <- function(my_file_dir, msg = F){
   
-  # y_px_size = read_tags(my_file_dir) %>% 
-  #   pluck("frame1", "y_resolution")
+  file_id = path_file(my_file_dir)
+  y_px_size = read_tags(my_file_dir) %>%
+    pluck("frame1", "y_resolution")
   
   my_trace_df <- my_file_dir %>%
     ijtiff::read_tif(msg = msg) %>%
@@ -64,8 +65,11 @@ make_trace_df <- function(my_file_dir, msg = F){
     rowMeans() %>%
     # dplyr::tibble(Time = 1:length(.) * y_px_size / 1000, # set the time in seconds
     #        Fluorescence = .)
-    dplyr::tibble(Fluorescence = .)
+    dplyr::tibble(file_id = file_id,
+                  Fluorescence = .,
+                  y_px_size =  y_px_size)
   
+  rm(file_id, y_px_size)
   return(my_trace_df)
 }
 
@@ -193,32 +197,32 @@ multiple_ls_profile <- function(my_dir){
 
 
 
-future::plan(multisession, workers = 7)
-future::plan(multicore)
-
-multiple_ls_profile_parall <- function(my_dir){
-  
-  #list the tif files in the provided directory
-  my_ls_file_list <- my_dir %>% 
-    fs::dir_ls(regexp = "[0-9]{4,4}_BG.tif$")
-
-  # create df of files metadata
-  metadata <- my_ls_file_list %>% 
-    furrr::future_map_dfr(~extract_metadata_tif(.x, 
-                                  meta_data =  c("y_resolution")), 
-            .id = "file_id")
-  
-  full_ls_df <- my_ls_file_list %>% 
-    furrr::future_map_dfr(make_trace_df, .id = "file_id") %>% 
-    left_join(metadata, by = "file_id") %>% 
-    mutate(file_id = str_sub(file_id, start = -24)) %>% 
-    mutate(Time = 1:length(Time) * y_resolution / 1000) %>% #set in sec the time
-    select(-y_resolution)
-  
-  rm(my_ls_file_list, metadata)
-  
-  return(full_ls_df)
-}
+# future::plan(multisession, workers = 7)
+# future::plan(multicore)
+# 
+# multiple_ls_profile_parall <- function(my_dir){
+#   
+#   #list the tif files in the provided directory
+#   my_ls_file_list <- my_dir %>% 
+#     fs::dir_ls(regexp = "[0-9]{4,4}_BG.tif$")
+# 
+#   # create df of files metadata
+#   metadata <- my_ls_file_list %>% 
+#     furrr::future_map_dfr(~extract_metadata_tif(.x, 
+#                                   meta_data =  c("y_resolution")), 
+#             .id = "file_id")
+#   
+#   full_ls_df <- my_ls_file_list %>% 
+#     furrr::future_map_dfr(make_trace_df, .id = "file_id") %>% 
+#     left_join(metadata, by = "file_id") %>% 
+#     mutate(file_id = str_sub(file_id, start = -24)) %>% 
+#     mutate(Time = 1:length(Time) * y_resolution / 1000) %>% #set in sec the time
+#     select(-y_resolution)
+#   
+#   rm(my_ls_file_list, metadata)
+#   
+#   return(full_ls_df)
+# }
 ```
 
 
@@ -238,6 +242,16 @@ path_to_file2 %>%
 tictoc::toc()
 ```
 
+```{r}
+clean_data_func <- function(raw_pooled_LS_df){
+  
+  raw_pooled_LS_df %>%
+    mutate(file_id = str_sub(file_id, start = -24)) %>% 
+    mutate(Time = 1:length(Fluorescence) * y_px_size / 1000) %>% #set in sec the time
+    select(-y_px_size)
+}
+```
+
 
 
 ```{r}
@@ -245,8 +259,13 @@ path_to_file2 %>%
 # list.files(full.names = TRUE, pattern = "[0-9]_BG.tif$", recursive = TRUE) %>%
   fs::dir_ls(regexp = "[0-9]{4,4}_BG.tif$") %>% 
   # str
-  map_dfr(~extract_metadata_tif(.x, meta_data =  c("y_resolution")), 
-          .id = "file_id")# %>% 
+  map_dfr(~make_trace_df(.x)) %>% 
+  # distinct(file_id)
+  
+  clean_data_func %>% 
+  make_plotly_profile
+  # map_dfr(~extract_metadata_tif(.x, meta_data =  c("y_resolution")), 
+  #         .id = "file_id")# %>% 
   str()
 ```
 
