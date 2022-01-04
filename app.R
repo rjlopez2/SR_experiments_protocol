@@ -9,17 +9,18 @@ pacman::p_load(shiny, tidyverse, plotly,
 # Define helper functions
 
 # create df from plrofiles of tif ls images
-make_trace_df <- function(my_file_dir){
+make_trace_df <- function(my_file_dir, msg = F){
   
-  y_px_size = read_tags(my_file_dir) %>% 
-    pluck("frame1", "y_resolution")
+  # y_px_size = read_tags(my_file_dir) %>% 
+  #   pluck("frame1", "y_resolution")
   
   my_trace_df <- my_file_dir %>%
-    ijtiff::read_tif() %>%
+    ijtiff::read_tif(msg = msg) %>%
     `[` ( , , 1, 1) %>%
     rowMeans() %>%
-    dplyr::tibble(Time = 1:length(.) * y_px_size / 1000, # set the time in seconds
-                  Fluorescence = .)
+    # dplyr::tibble(Time = 1:length(.) * y_px_size / 1000, # set the time in seconds
+    #        Fluorescence = .)
+    dplyr::tibble(Fluorescence = .)
   
   return(my_trace_df)
 }
@@ -39,17 +40,21 @@ make_plotly_profile <- function(ls_profile_df){
 
 # extract metadata from a single tif file
 
-extract_metadata_tif <- function(file_dir, meta_data){
+extract_metadata_tif <- function(file_dir, meta_data = "y_resolution"){
   
-  meta_data_names <- set_names(list(meta_data))
+  if(meta_data == "all"){
+    metadata_df <- read_tags(file_dir, frames = "all") %>% 
+      pluck(pluck("frame1"))
+    
+  }else{
+    metadata_df <- meta_data %>%
+      map_dfc(~read_tags(file_dir, frames = "all") %>% 
+                pluck(pluck("frame1"))) %>% 
+      select(all_of(meta_data))
+  }
   
-  metadata_df <- meta_data_names %>%
-    map_dfc(~read_tags(file_dir, frames = "all") %>% 
-              pluck(pluck("frame1"))) %>% 
-    select(all_of(meta_data))
-  
-  rm(meta_data_names)
   return(metadata_df)
+  
 }
 
 # create df profiles from multiples tif ls images concatenated
@@ -67,9 +72,9 @@ multiple_ls_profile <- function(my_dir){
   
   full_ls_df <- my_ls_file_list %>% 
     map_dfr(make_trace_df, .id = "file_id") %>% 
-    dplyr::left_join(metadata, by = "file_id") %>% 
+    left_join(metadata, by = "file_id") %>% 
     mutate(file_id = str_sub(file_id, start = -24)) %>% 
-    mutate(Time = 1:length(Time) * y_resolution * 1000) %>% 
+    mutate(Time = 1:length(Fluorescence) * y_resolution / 1000) %>% #set in sec the time
     select(-y_resolution)
   
   rm(my_ls_file_list, metadata)
