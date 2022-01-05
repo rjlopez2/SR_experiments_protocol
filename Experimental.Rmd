@@ -36,9 +36,6 @@ pacman::p_load(shiny, tidyverse, plotly,
 path_to_file <- "~/Desktop/new_intac_cell_repre_ls/CPVT/20190117 L1 CS3 Cell A0002_BG.tif"
 path_to_file2 <- "/Volumes/RUBEN FILES/Ruben/Work/GroupNiggli/Confocal/2021/SR_exepriments/211214/CPVT-HET/P2/CS1"
 
-path_to_file2 %>% 
-list.files(full.names = TRUE, pattern = "[0-9]_BG.tif$", recursive = TRUE) #%>% 
-  
 ```
 
 
@@ -55,22 +52,26 @@ read_tags(path_to_file, frames = "all")
 ```{r}
 make_trace_df <- function(my_file_dir, msg = F){
   
-  file_id = path_file(my_file_dir)
+  # read metadata
   y_px_size = read_tags(my_file_dir) %>%
     pluck("frame1", "y_resolution")
+  # read image
+  image <- my_file_dir %>%
+    ijtiff::read_tif(msg = msg) 
   
-  my_trace_df <- my_file_dir %>%
-    ijtiff::read_tif(msg = msg) %>%
-    `[` ( , , 1, 1) %>%
-    rowMeans() %>%
-    # dplyr::tibble(Time = 1:length(.) * y_px_size / 1000, # set the time in seconds
-    #        Fluorescence = .)
-    dplyr::tibble(file_id = file_id,
-                  Fluorescence = .,
-                  y_px_size =  y_px_size)
+  my_trace_df <- map_dfr(list(ch1 = 1, ch2 = 2), ~ image[, , .x, 1] %>% 
+                     rowMeans(), .id = "Channels") %>% 
+    pivot_longer(names_to = "Channel",
+                 cols = contains("ch"),
+                 values_to = "Fluorescence") %>%
+    mutate(Channel = factor(Channel, c("ch2", "ch1")),
+           y_px_size =  y_px_size,
+           file_id = path_file(my_file_dir))
+    
   
-  rm(file_id, y_px_size)
+  rm(image, y_px_size)
   return(my_trace_df)
+  
 }
 
 ```
@@ -126,74 +127,76 @@ list.files(full.names = TRUE, pattern = "[0-9]_BG.tif$", recursive = TRUE) #%>%
 # make plotly plot
 
 ```{r}
-make_plotly_profile <- function(ls_profile_df){
+make_plotly_profile <- function(ls_profile_df, size = 4){
   {ls_profile_df %>% 
-    ggplot2::ggplot(aes(x = Time, 
-             y = Fluorescence)) +
-    geom_line()} %>% 
+      ggplot2::ggplot(aes(x = Time, 
+                          y = Fluorescence)) +
+      ggplot2::geom_line(size = size) + 
+      ggplot2::facet_grid(Channel~ .)} %>% 
     ggplotly()
     
 }
 ```
 
 
-# extract metadata form a single tif file -> updated (remove warning cuased by setnames function)
+# extract metadata form a single tif file -> updated (remove warning cuased by setnames function) --> deprecated
+deprecated
 
 ```{r}
 
-extract_metadata_tif <- function(file_dir, meta_data = "y_resolution"){
-  
-  if(meta_data == "all"){
-    metadata_df <- read_tags(file_dir, frames = "all") %>% 
-      pluck(pluck("frame1"))
-    
-  }else{
-    metadata_df <- meta_data %>%
-      map_dfc(~read_tags(file_dir, frames = "all") %>% 
-                pluck(pluck("frame1"))) %>% 
-      select(all_of(meta_data))
-  }
-
-  return(metadata_df)
-
-}
-
-
-# file_list[1] %>% 
-path_to_file2 %>% 
-  
-  # read_tags( frames = "all")
-  # extract_metadata_tif()
-  # make_trace_df()
-  multiple_ls_profile %>% 
-  make_plotly_profile()
+# extract_metadata_tif <- function(file_dir, meta_data = "y_resolution"){
+#   
+#   if(meta_data == "all"){
+#     metadata_df <- read_tags(file_dir, frames = "all") %>% 
+#       pluck(pluck("frame1"))
+#     
+#   }else{
+#     metadata_df <- meta_data %>%
+#       map_dfc(~read_tags(file_dir, frames = "all") %>% 
+#                 pluck(pluck("frame1"))) %>% 
+#       select(all_of(meta_data))
+#   }
+# 
+#   return(metadata_df)
+# 
+# }
+# 
+# 
+# # file_list[1] %>% 
+# path_to_file2 %>% 
+#   
+#   # read_tags( frames = "all")
+#   # extract_metadata_tif()
+#   # make_trace_df()
+#   multiple_ls_profile %>% 
+#   make_plotly_profile()
 ```
 
-# create df profiles from multiples tif ls images concatenated
+# create df profiles from multiples tif ls images concatenated -> deprecated for map_function
 
 ```{r}
-multiple_ls_profile <- function(my_dir){
-  #list the tif files in the provided directory
-  my_ls_file_list <- my_dir %>% 
-    fs::dir_ls(regexp = "[0-9]{4,4}_BG.tif$")
-
-  # create df of files metadata
-  metadata <- my_ls_file_list %>% 
-    map_dfr(~extract_metadata_tif(.x, 
-                                  meta_data =  c("y_resolution")), 
-            .id = "file_id")
-  
-  full_ls_df <- my_ls_file_list %>% 
-    map_dfr(make_trace_df, .id = "file_id") %>% 
-    left_join(metadata, by = "file_id") %>% 
-    mutate(file_id = str_sub(file_id, start = -24)) %>% 
-    mutate(Time = 1:length(Fluorescence) * y_resolution / 1000) %>% #set in sec the time
-    select(-y_resolution)
-  
-  rm(my_ls_file_list, metadata)
-  
-  return(full_ls_df)
-}
+# multiple_ls_profile <- function(my_dir){
+#   #list the tif files in the provided directory
+#   my_ls_file_list <- my_dir %>% 
+#     fs::dir_ls(regexp = "[0-9]{4,4}_BG.tif$")
+# 
+#   # create df of files metadata
+#   metadata <- my_ls_file_list %>% 
+#     map_dfr(~extract_metadata_tif(.x, 
+#                                   meta_data =  c("y_resolution")), 
+#             .id = "file_id")
+#   
+#   full_ls_df <- my_ls_file_list %>% 
+#     map_dfr(make_trace_df, .id = "file_id") %>% 
+#     left_join(metadata, by = "file_id") %>% 
+#     mutate(file_id = str_sub(file_id, start = -24)) %>% 
+#     mutate(Time = 1:length(Fluorescence) * y_resolution / 1000) %>% #set in sec the time
+#     select(-y_resolution)
+#   
+#   rm(my_ls_file_list, metadata)
+#   
+#   return(full_ls_df)
+# }
 
 
 
@@ -229,24 +232,9 @@ multiple_ls_profile <- function(my_dir){
 
 
 ```{r}
-# tictoc::tic()
-path_to_file2 %>%
-  multiple_ls_profile #%>% 
-# tictoc::toc()
-  # make_plotly_profile()
-```
-```{r}
-tictoc::tic()
-path_to_file2 %>% 
-  multiple_ls_profile_parall #%>% 
-tictoc::toc()
-```
-
-```{r}
 clean_data_func <- function(raw_pooled_LS_df){
-  
   raw_pooled_LS_df %>%
-    mutate(file_id = str_sub(file_id, start = -24)) %>% 
+    # mutate(file_id = str_sub(file_id, start = -24)) %>% 
     mutate(Time = 1:length(Fluorescence) * y_px_size / 1000) %>% #set in sec the time
     select(-y_px_size)
 }
@@ -259,7 +247,7 @@ path_to_file2 %>%
 # list.files(full.names = TRUE, pattern = "[0-9]_BG.tif$", recursive = TRUE) %>%
   fs::dir_ls(regexp = "[0-9]{4,4}_BG.tif$") %>% 
   # str
-  map_dfr(~make_trace_df(.x)) %>% 
+  map_dfr(~make_trace_df(.x)) #%>% 
   # distinct(file_id)
   
   clean_data_func %>% 
@@ -267,5 +255,26 @@ path_to_file2 %>%
   # map_dfr(~extract_metadata_tif(.x, meta_data =  c("y_resolution")), 
   #         .id = "file_id")# %>% 
   str()
+```
+
+```{r}
+path_to_file2 %>% 
+# list.files(full.names = TRUE, pattern = "[0-9]_BG.tif$", recursive = TRUE) %>%
+  fs::dir_ls(regexp = "[0-9]{4,4}_BG.tif$") %>%
+  `[` (1) %>% 
+  make_trace_df_test()
+
+
+```
+
+
+```{r}
+path_to_file2 %>%
+  fs::dir_ls(regexp = "[0-9]{4,4}_BG.tif$") %>%
+  # `[` (1) %>% 
+  map_dfr(~make_trace_df_test(.x)) %>% 
+  clean_data_func() %>% 
+  # str
+  make_plotly_profile(size = 0.2)
 ```
 
